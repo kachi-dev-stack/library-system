@@ -1,6 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import {
+  BarChart3,
+  AlertTriangle,
+  ShieldAlert,
+  History,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
+import { StatCard } from "@/components/StatCard";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Loan = {
   id: string;
@@ -48,391 +60,325 @@ type RiskProfile = {
   riskLevel: "High" | "Medium";
 };
 
+interface ReportsClientProps {
+  loans: Loan[];
+  topBooks: TopBook[];
+  overdueLoans: OverdueLoan[];
+  activeLoans: ActiveLoan[];
+}
+
 export default function ReportsClient({
   loans,
   topBooks,
   overdueLoans,
   activeLoans,
-}: {
-  loans: Loan[];
-  topBooks: TopBook[];
-  overdueLoans: OverdueLoan[];
-  activeLoans: ActiveLoan[];
-}) {
-  const [tab, setTab] = useState<"summary" | "overdue" | "risk" | "history">(
-    "summary",
-  );
-
+}: ReportsClientProps) {
+  // Calculate summary stats
   const totalLoans = loans.length;
   const activeCount = loans.filter((l) => l.status === "active").length;
-  const returnedCount = loans.filter((l) => l.status === "returned").length;
   const totalFines = loans.reduce((sum, l) => sum + (l.fine_amount || 0), 0);
 
-  const bookCount: Record<
-    string,
-    { title: string; author: string; count: number }
-  > = {};
-  topBooks.forEach((record) => {
-    const id = record.book_id;
-    if (!bookCount[id])
-      bookCount[id] = {
-        title: record.book?.title,
-        author: record.book?.author,
-        count: 0,
-      };
-    bookCount[id].count++;
-  });
-  const mostBorrowed = Object.values(bookCount)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  const lateReturnMap: Record<string, number> = {};
-  const totalLoanMap: Record<string, number> = {};
-
-  loans.forEach((loan) => {
-    const memberId = loan.member_id;
-    if (!memberId) return;
-    totalLoanMap[memberId] = (totalLoanMap[memberId] || 0) + 1;
-    if (loan.status === "returned" && loan.returned_at) {
-      const returnedAt = new Date(loan.returned_at);
-      const dueDate = new Date(loan.due_date);
-      if (returnedAt > dueDate) {
-        lateReturnMap[memberId] = (lateReturnMap[memberId] || 0) + 1;
+  // Calculate most borrowed books
+  const mostBorrowed = useMemo(() => {
+    const bookCount: Record<
+      string,
+      { title: string; author: string; count: number }
+    > = {};
+    topBooks.forEach((record) => {
+      const id = record.book_id;
+      if (!bookCount[id]) {
+        bookCount[id] = {
+          title: record.book?.title || "Unknown",
+          author: record.book?.author || "Unknown",
+          count: 0,
+        };
       }
-    }
-  });
+      bookCount[id].count++;
+    });
+    return Object.values(bookCount)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [topBooks]);
 
-  const riskProfiles: RiskProfile[] = activeLoans
-    .filter((loan) => (lateReturnMap[loan.member_id] || 0) >= 1)
-    .map((loan) => {
-      const lateCount = lateReturnMap[loan.member_id] || 0;
-      return {
-        member_id: loan.member_id,
-        full_name: loan.member?.full_name,
-        email: loan.member?.email,
-        lateReturns: lateCount,
-        totalLoans: totalLoanMap[loan.member_id] || 1,
-        currentBook: loan.book?.title || "Unknown",
-        dueDate: loan.due_date,
-        riskLevel: (lateCount >= 2 ? "High" : "Medium") as "High" | "Medium",
-      };
-    })
-    .sort((a, b) => b.lateReturns - a.lateReturns);
+  // Calculate risk profiles
+  const riskProfiles = useMemo(() => {
+    const lateReturnMap: Record<string, number> = {};
+    const totalLoanMap: Record<string, number> = {};
+
+    loans.forEach((loan) => {
+      const memberId = loan.member_id;
+      if (!memberId) return;
+      totalLoanMap[memberId] = (totalLoanMap[memberId] || 0) + 1;
+      if (loan.status === "returned" && loan.returned_at) {
+        const returnedAt = new Date(loan.returned_at);
+        const dueDate = new Date(loan.due_date);
+        if (returnedAt > dueDate) {
+          lateReturnMap[memberId] = (lateReturnMap[memberId] || 0) + 1;
+        }
+      }
+    });
+
+    return activeLoans
+      .filter((loan) => (lateReturnMap[loan.member_id] || 0) >= 1)
+      .map((loan) => {
+        const lateCount = lateReturnMap[loan.member_id] || 0;
+        return {
+          member_id: loan.member_id,
+          full_name: loan.member?.full_name || "Unknown",
+          email: loan.member?.email || "",
+          lateReturns: lateCount,
+          totalLoans: totalLoanMap[loan.member_id] || 1,
+          currentBook: loan.book?.title || "Unknown",
+          dueDate: loan.due_date,
+          riskLevel: (lateCount >= 2 ? "High" : "Medium") as "High" | "Medium",
+        };
+      })
+      .sort((a, b) => b.lateReturns - a.lateReturns);
+  }, [loans, activeLoans]);
+
+  const maxBorrow = mostBorrowed[0]?.count || 1;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-        <a href="/admin" className="text-gray-400 hover:text-gray-600">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        </a>
-        <span className="font-bold text-gray-900">Reports</span>
-      </nav>
+    <Tabs defaultValue="summary">
+      <TabsList className="flex-wrap">
+        <TabsTrigger value="summary">
+          <BarChart3 className="h-4 w-4" /> Summary
+        </TabsTrigger>
+        <TabsTrigger value="overdue">
+          <AlertTriangle className="h-4 w-4" /> Overdue
+        </TabsTrigger>
+        <TabsTrigger value="risk">
+          <ShieldAlert className="h-4 w-4" /> Risk detection
+        </TabsTrigger>
+        <TabsTrigger value="history">
+          <History className="h-4 w-4" /> History
+        </TabsTrigger>
+      </TabsList>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {(["summary", "overdue", "risk", "history"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition ${tab === t ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-            >
-              {t === "risk" ? "⚠️ Risk Detection" : t}
-            </button>
-          ))}
+      {/* Summary Tab */}
+      <TabsContent value="summary" className="mt-5 space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total loans" value={totalLoans} icon={BarChart3} />
+          <StatCard
+            label="Active loans"
+            value={activeCount}
+            icon={TrendingUp}
+            tone="success"
+          />
+          <StatCard
+            label="Overdue loans"
+            value={overdueLoans.length}
+            icon={AlertTriangle}
+            tone="danger"
+          />
+          <StatCard
+            label="Fines collected"
+            value={`₦${totalFines.toLocaleString()}`}
+            icon={BarChart3}
+            tone="gold"
+          />
         </div>
 
-        {tab === "summary" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatBox label="Total Loans" value={totalLoans} color="blue" />
-              <StatBox
-                label="Active Loans"
-                value={activeCount}
-                color="yellow"
-              />
-              <StatBox label="Returned" value={returnedCount} color="green" />
-              <StatBox label="Total Fines (₦)" value={totalFines} color="red" />
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-4">
-                Most Borrowed Books
-              </h2>
-              {mostBorrowed.length === 0 ? (
-                <p className="text-gray-400 text-sm">No borrowing data yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {mostBorrowed.map((book, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">
-                          {i + 1}
-                        </span>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {book.title}
-                          </p>
-                          <p className="text-xs text-gray-500">{book.author}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-blue-600">
-                        {book.count}x
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {tab === "overdue" && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            {overdueLoans.length === 0 ? (
-              <div className="text-center py-20 text-gray-400">
-                <p className="text-4xl mb-3">✅</p>
-                <p className="font-medium">No overdue loans</p>
-              </div>
+        <Card className="p-6" style={{ boxShadow: "var(--shadow-soft)" }}>
+          <h3 className="font-serif text-lg font-semibold text-foreground">
+            Most borrowed books
+          </h3>
+          <div className="mt-4 space-y-3">
+            {mostBorrowed.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                No borrowing data yet
+              </p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+              mostBorrowed.map((book) => (
+                <div key={book.title} className="flex items-center gap-3">
+                  <span className="w-40 shrink-0 truncate text-sm text-foreground sm:w-56">
+                    {book.title}
+                  </span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-600"
+                      style={{ width: `${(book.count / maxBorrow) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-sm font-medium text-muted-foreground">
+                    {book.count}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </TabsContent>
+
+      {/* Overdue Tab */}
+      <TabsContent value="overdue" className="mt-5">
+        <Card
+          className="overflow-hidden"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Book</th>
+                  <th className="px-4 py-3 font-medium">Member</th>
+                  <th className="px-4 py-3 font-medium">Due</th>
+                  <th className="px-4 py-3 font-medium">Fine</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {overdueLoans.length === 0 ? (
                   <tr>
-                    <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                      Member
-                    </th>
-                    <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                      Book
-                    </th>
-                    <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                      Due Date
-                    </th>
-                    <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                      Days Late
-                    </th>
-                    <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                      Fine
-                    </th>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-8 text-center text-muted-foreground"
+                    >
+                      No overdue loans
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {overdueLoans.map((loan) => {
+                ) : (
+                  overdueLoans.map((loan) => {
                     const daysLate = Math.floor(
                       (new Date().getTime() -
                         new Date(loan.due_date).getTime()) /
                         (1000 * 60 * 60 * 24),
                     );
                     return (
-                      <tr key={loan.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <p className="font-medium text-gray-900">
-                            {loan.member?.full_name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {loan.member?.email}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
+                      <tr key={loan.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 font-medium text-foreground">
                           {loan.book?.title}
                         </td>
-                        <td className="px-6 py-4 text-red-500">
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {loan.member?.full_name}
+                        </td>
+                        <td className="px-4 py-3 text-danger">
                           {new Date(loan.due_date).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="bg-red-50 text-red-600 text-xs px-2 py-1 rounded-full font-medium">
-                            {daysLate} days
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
-                          ₦{daysLate * 50}
+                        <td className="px-4 py-3 font-medium text-danger">
+                          ₦{(daysLate * 50).toLocaleString()}
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {tab === "risk" && (
-          <div className="space-y-4">
-            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
-              <p className="text-purple-700 font-semibold text-sm mb-1">
-                ✨ AI — Overdue Risk Detection
-              </p>
-              <p className="text-xs text-purple-600">
-                Members are flagged based on their return history. High risk = 2
-                or more late returns. Medium risk = 1 late return. Only members
-                with active loans are shown.
-              </p>
-            </div>
-            {riskProfiles.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-gray-200 text-center py-20 text-gray-400">
-                <p className="text-4xl mb-3">✅</p>
-                <p className="font-medium">No at-risk members detected</p>
-                <p className="text-sm mt-1">
-                  All active borrowers have a clean return history
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                        Member
-                      </th>
-                      <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                        Current Book
-                      </th>
-                      <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                        Due Date
-                      </th>
-                      <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                        Late Returns
-                      </th>
-                      <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                        Risk Level
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {riskProfiles.map((p, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <p className="font-medium text-gray-900">
-                            {p.full_name}
-                          </p>
-                          <p className="text-xs text-gray-500">{p.email}</p>
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
-                          {p.currentBook}
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">
-                          {new Date(p.dueDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-semibold text-gray-800">
-                            {p.lateReturns}
-                          </span>
-                          <span className="text-gray-400 text-xs">
-                            {" "}
-                            / {p.totalLoans} loans
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`text-xs font-semibold px-3 py-1 rounded-full ${p.riskLevel === "High" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}
-                          >
-                            {p.riskLevel} Risk
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === "history" && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Member
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Book
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Borrowed
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Due Date
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Fine
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loans.map((loan) => (
-                  <tr key={loan.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {loan.member?.full_name}
-                    </td>
-                    <td className="px-6 py-4 text-gray-700">
-                      {loan.book?.title}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(loan.borrowed_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(loan.due_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          loan.status === "active"
-                            ? "bg-yellow-50 text-yellow-700"
-                            : loan.status === "returned"
-                              ? "bg-green-50 text-green-700"
-                              : "bg-red-50 text-red-600"
-                        }`}
-                      >
-                        {loan.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {loan.fine_amount > 0 ? `₦${loan.fine_amount}` : "—"}
-                    </td>
-                  </tr>
-                ))}
+                  })
+                )}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </Card>
+      </TabsContent>
 
-function StatBox({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  const colors: Record<string, string> = {
-    blue: "text-blue-700",
-    green: "text-green-700",
-    yellow: "text-yellow-700",
-    red: "text-red-600",
-  };
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6">
-      <p className={`text-3xl font-bold ${colors[color]}`}>{value}</p>
-      <p className="text-sm text-gray-500 mt-1">{label}</p>
-    </div>
+      {/* Risk Detection Tab */}
+      <TabsContent value="risk" className="mt-5 space-y-4">
+        <Card className="flex items-start gap-3 border-gold/40 bg-gold/10 p-4">
+          <Sparkles className="mt-0.5 h-5 w-5 text-gold-foreground" />
+          <p className="text-sm text-foreground">
+            <span className="font-semibold">AI risk detection.</span> Members
+            with an active loan and a history of late returns are flagged here —{" "}
+            <strong>medium</strong> for one late return,
+            <strong> high</strong> for two or more.
+          </p>
+        </Card>
+
+        {riskProfiles.length === 0 ? (
+          <Card className="grid place-items-center gap-2 p-12 text-center">
+            <ShieldAlert className="h-8 w-8 text-muted-foreground" />
+            <p className="text-muted-foreground">No at-risk members detected</p>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {riskProfiles.map((member) => (
+              <Card
+                key={member.member_id}
+                className="flex items-center justify-between gap-3 p-5"
+                style={{ boxShadow: "var(--shadow-soft)" }}
+              >
+                <div>
+                  <p className="font-medium text-foreground">
+                    {member.full_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Currently borrowing “{member.currentBook}”
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {member.lateReturns} late return(s) on record
+                  </p>
+                </div>
+                <Badge
+                  className={
+                    member.riskLevel === "High"
+                      ? "bg-danger text-danger-foreground"
+                      : "bg-warning text-warning-foreground"
+                  }
+                >
+                  {member.riskLevel === "High" ? "High risk" : "Medium risk"}
+                </Badge>
+              </Card>
+            ))}
+          </div>
+        )}
+      </TabsContent>
+
+      {/* History Tab */}
+      <TabsContent value="history" className="mt-5">
+        <Card
+          className="overflow-hidden"
+          style={{ boxShadow: "var(--shadow-soft)" }}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Book</th>
+                  <th className="px-4 py-3 font-medium">Member</th>
+                  <th className="px-4 py-3 font-medium">Issued</th>
+                  <th className="px-4 py-3 font-medium">Returned</th>
+                  <th className="px-4 py-3 font-medium">Fine</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {loans.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-8 text-center text-muted-foreground"
+                    >
+                      No loan history yet
+                    </td>
+                  </tr>
+                ) : (
+                  loans.map((loan) => (
+                    <tr key={loan.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {loan.book?.title}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {loan.member?.full_name}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(loan.borrowed_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {loan.returned_at
+                          ? new Date(loan.returned_at).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {loan.fine_amount > 0 ? (
+                          <span className="text-danger">
+                            ₦{loan.fine_amount.toLocaleString()}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }

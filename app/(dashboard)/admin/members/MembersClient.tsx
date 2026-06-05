@@ -2,6 +2,34 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  Plus,
+  Search,
+  UserX,
+  UserCheck,
+  Users,
+  X,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Member = {
   id: string;
@@ -12,16 +40,18 @@ type Member = {
   created_at: string;
 };
 
+interface MembersClientProps {
+  members: Member[];
+}
+
 export default function MembersClient({
   members: initial,
-}: {
-  members: Member[];
-}) {
+}: MembersClientProps) {
   const [members, setMembers] = useState(initial);
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -37,14 +67,23 @@ export default function MembersClient({
       m.email?.toLowerCase().includes(search.toLowerCase()),
   );
 
+  const resetForm = () => {
+    setForm({
+      full_name: "",
+      email: "",
+      phone: "",
+      password: "",
+    });
+    setShowPassword(false);
+  };
+
   const handleAdd = async () => {
-    setLoading(true);
-    setError("");
     if (!form.full_name || !form.email || !form.password) {
-      setError("Name, email and password are required");
-      setLoading(false);
+      toast.error("Name, email and password are required");
       return;
     }
+
+    setLoading(true);
 
     const res = await fetch("/api/members/create", {
       method: "POST",
@@ -54,214 +93,233 @@ export default function MembersClient({
 
     const result = await res.json();
     if (!res.ok) {
-      setError(result.error);
+      toast.error(result.error);
       setLoading(false);
       return;
     }
 
     setMembers([result.member, ...members]);
-    setShowForm(false);
-    setForm({ full_name: "", email: "", phone: "", password: "" });
+    toast.success("Member added successfully");
+    setFormOpen(false);
+    resetForm();
     setLoading(false);
   };
 
   const toggleStatus = async (member: Member) => {
     const newStatus = member.status === "active" ? "suspended" : "active";
-    await supabase
+    const { error } = await supabase
       .from("profiles")
       .update({ status: newStatus })
       .eq("id", member.id);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
     setMembers(
       members.map((m) =>
         m.id === member.id ? { ...m, status: newStatus } : m,
       ),
     );
+    toast.success(
+      `${member.full_name} ${newStatus === "active" ? "activated" : "suspended"}`,
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <a href="/admin" className="text-gray-400 hover:text-gray-600">
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </a>
-          <span className="font-bold text-gray-900">Manage Members</span>
+    <div className="space-y-6">
+      {/* Search and Add Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search members by name or email…"
+            className="pl-9"
+          />
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+        <Button onClick={() => setFormOpen(true)} className="shrink-0">
+          <Plus className="h-4 w-4" /> Add member
+        </Button>
+      </div>
+
+      {/* Members Table */}
+      {filtered.length === 0 ? (
+        <Card className="grid place-items-center gap-2 p-12 text-center">
+          <Users className="h-8 w-8 text-muted-foreground" />
+          <p className="text-muted-foreground">No members match your search.</p>
+        </Card>
+      ) : (
+        <Card
+          className="overflow-hidden"
+          style={{ boxShadow: "var(--shadow-soft)" }}
         >
-          + Add Member
-        </button>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <input
-          type="text"
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md border border-gray-300 rounded-lg px-4 py-2.5 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-
-        {filtered.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <p className="text-4xl mb-3">👥</p>
-            <p className="font-medium">No members found</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Name
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Email
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Phone
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Joined
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">
-                    Action
-                  </th>
+                  <th className="px-4 py-3 font-medium">Member</th>
+                  <th className="px-4 py-3 font-medium">Phone</th>
+                  <th className="px-4 py-3 font-medium">Joined</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {filtered.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {member.full_name}
+                  <tr key={member.id} className="hover:bg-muted/30 transition">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {member.full_name?.charAt(0)}
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {member.full_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {member.email}
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{member.email}</td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-4 py-3 text-muted-foreground">
                       {member.phone || "—"}
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(member.created_at).toLocaleDateString()}
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {new Date(member.created_at).toLocaleDateString("en-US", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${member.status === "active" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}
-                      >
-                        {member.status}
-                      </span>
+                    <td className="px-4 py-3">
+                      {member.status === "active" ? (
+                        <Badge className="bg-success text-success-foreground">
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-danger text-danger-foreground">
+                          Suspended
+                        </Badge>
+                      )}
                     </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => toggleStatus(member)}
-                        className={`text-xs hover:underline ${member.status === "active" ? "text-red-500" : "text-green-600"}`}
-                      >
-                        {member.status === "active" ? "Suspend" : "Activate"}
-                      </button>
+                    <td className="px-4 py-3">
+                      {member.status === "active" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-danger hover:text-danger"
+                          onClick={() => toggleStatus(member)}
+                        >
+                          <UserX className="h-3.5 w-3.5" /> Suspend
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => toggleStatus(member)}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" /> Activate
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">
-              Add New Member
-            </h2>
-            {error && (
-              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">
-                {error}
-              </div>
-            )}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Full Name *
-                </label>
-                <input
-                  value={form.full_name}
-                  onChange={(e) =>
-                    setForm({ ...form, full_name: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Phone
-                </label>
-                <input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Password *
-                </label>
-                <input
-                  type="password"
+      {/* Add Member Dialog */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Add a new member</DialogTitle>
+            <DialogDescription>
+              Create a library account for a new member.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full name *</Label>
+              <Input
+                id="name"
+                value={form.full_name}
+                onChange={(e) =>
+                  setForm({ ...form, full_name: e.target.value })
+                }
+                placeholder="Amara Nwosu"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="amara@example.com"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+234 800 000 0000"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password *</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) =>
                     setForm({ ...form, password: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Min. 6 characters"
+                  required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setError("");
-                }}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-              >
-                {loading ? "Creating..." : "Add Member"}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setFormOpen(false);
+                resetForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAdd} disabled={loading}>
+              {loading ? "Adding..." : "Add member"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
