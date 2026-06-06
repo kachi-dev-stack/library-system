@@ -42,7 +42,6 @@ type Book = {
   available_copies: number;
 };
 
-// Array of beautiful gradient classes for book covers
 const coverGradients = [
   "bg-gradient-to-br from-amber-600 to-orange-700",
   "bg-gradient-to-br from-emerald-600 to-teal-700",
@@ -68,6 +67,7 @@ export default function MemberDashboard() {
   const [recommendations, setRecommendations] = useState<Book[]>([]);
   const [topCategories, setTopCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suspended, setSuspended] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -94,11 +94,11 @@ export default function MemberDashboard() {
       }
 
       if (profileData?.status === "suspended") {
-        router.push("/login");
+        setSuspended(true);
+        setLoading(false);
         return;
       }
 
-      // Get member's borrow history
       const { data: loansData } = await supabase
         .from("borrow_records")
         .select(
@@ -107,13 +107,11 @@ export default function MemberDashboard() {
         .eq("member_id", user.id)
         .order("borrowed_at", { ascending: false });
 
-      // Get all books for recommendations
       const { data: allBooks } = await supabase
         .from("books")
         .select("id, title, author, category, available_copies")
         .gt("available_copies", 0);
 
-      // --- INTELLIGENCE: Content-based recommendation ---
       const categoryCount: Record<string, number> = {};
       const borrowedBookIds = new Set<string>();
 
@@ -131,14 +129,12 @@ export default function MemberDashboard() {
         .slice(0, 3)
         .map(([cat]) => cat);
 
-      // Recommend books in top categories that member hasn't borrowed yet
       let recommendedBooks = (allBooks ?? [])
         .filter(
           (b) => !borrowedBookIds.has(b.id) && topCats.includes(b.category),
         )
         .slice(0, 5);
 
-      // Fallback: if no history, show any available books
       if (recommendedBooks.length === 0) {
         recommendedBooks = (allBooks ?? [])
           .filter((b) => !borrowedBookIds.has(b.id))
@@ -146,7 +142,7 @@ export default function MemberDashboard() {
       }
 
       setProfile(profileData);
-      setLoans((loansData as any) || []); // ← FIXED HERE
+      setLoans((loansData as any) || []);
       setRecommendations(recommendedBooks);
       setTopCategories(topCats);
       setLoading(false);
@@ -172,6 +168,29 @@ export default function MemberDashboard() {
     );
   }
 
+  if (suspended) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 text-center max-w-md">
+          <p className="text-4xl mb-4">🚫</p>
+          <h2 className="font-serif text-xl font-bold text-danger mb-2">
+            Account Suspended
+          </h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            Your library account has been suspended. Please contact the
+            librarian for assistance.
+          </p>
+          <a
+            href="/api/auth/signout"
+            className="text-sm text-danger hover:underline"
+          >
+            Sign out
+          </a>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <DashboardLayout
       nav={memberNav}
@@ -182,7 +201,6 @@ export default function MemberDashboard() {
       headerExtra={<NotificationBell />}
     >
       <div className="space-y-8">
-        {/* Overdue Alert */}
         {overdueLoans.length > 0 && (
           <Card className="border-danger/40 bg-danger/10 p-4">
             <div className="flex items-start gap-3">
@@ -200,7 +218,6 @@ export default function MemberDashboard() {
           </Card>
         )}
 
-        {/* Currently borrowed section */}
         <section>
           <div className="mb-3 flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
@@ -266,7 +283,6 @@ export default function MemberDashboard() {
           )}
         </section>
 
-        {/* AI Recommendations section */}
         <section>
           <Card
             className="border-gold/40 bg-gold/5 p-6"
@@ -320,7 +336,6 @@ export default function MemberDashboard() {
           </Card>
         </section>
 
-        {/* Borrowing history section */}
         <section>
           <div className="mb-3 flex items-center gap-2">
             <History className="h-5 w-5 text-primary" />

@@ -1,5 +1,17 @@
 import type { Metadata } from "next";
+import { Inter, Fraunces } from "next/font/google"; // 1. Import the fonts
 import "./globals.css";
+
+// 2. Configure the fonts
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-serif",
+});
 
 export const metadata: Metadata = {
   title: "Libra - Library Management System",
@@ -12,8 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    // 3. Apply the variables to the <html> tag
+    <html
+      lang="en"
+      className={`h-full antialiased ${inter.variable} ${fraunces.variable}`}
+    >
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );
 }
