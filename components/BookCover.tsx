@@ -20,10 +20,12 @@ export function BookCover({
       )}
     >
       <span className="absolute inset-y-0 left-1.5 w-1 rounded-full bg-white/20" />
-      <span className="font-serif text-sm font-semibold leading-tight text-white drop-shadow">
+      <span className="font-serif text-xs font-semibold leading-tight text-white drop-shadow line-clamp-3">
         {title}
       </span>
-      {author && <span className="text-[11px] text-white/80">{author}</span>}
+      {author && (
+        <span className="text-[10px] text-white/80 line-clamp-1">{author}</span>
+      )}
     </div>
   );
 }

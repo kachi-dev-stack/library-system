@@ -311,23 +311,21 @@ export default function MemberDashboard() {
                       title={book.title}
                       author={book.author}
                       cover={getBookGradient(book.title)}
-                      className="w-16 shrink-0"
+                      className="w-24 shrink-0"
                     />
-                    <div className="flex min-w-0 flex-col">
-                      <h3 className="truncate font-serif text-sm font-semibold text-foreground">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <h3 className="line-clamp-2 font-serif text-sm font-semibold text-foreground">
                         {book.title}
                       </h3>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="line-clamp-1 text-xs text-muted-foreground">
                         {book.author}
                       </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-auto w-full"
-                        onClick={() => router.push("/member/reservations")}
-                      >
-                        Reserve
-                      </Button>
+                      <Badge className="mt-auto w-fit bg-success text-success-foreground text-xs">
+                        Available
+                      </Badge>
+                      <p className="text-xs text-muted-foreground">
+                        Ask librarian to issue
+                      </p>
                     </div>
                   </Card>
                 ))}

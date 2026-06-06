@@ -30,7 +30,6 @@ type Reservation = {
   book: { id: string; title: string; author: string; available_copies: number };
 };
 
-// Array of beautiful gradient classes for book covers
 const coverGradients = [
   "bg-gradient-to-br from-amber-600 to-orange-700",
   "bg-gradient-to-br from-emerald-600 to-teal-700",
@@ -52,6 +51,10 @@ function getBookGradient(title: string): string {
 export default function ReservationsPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{
+    full_name: string;
+    role: string;
+  } | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [search, setSearch] = useState("");
@@ -71,18 +74,19 @@ export default function ReservationsPage() {
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, full_name")
         .eq("id", user.id)
         .single();
 
-      if (profile?.role !== "member") {
+      if (profileData?.role !== "member") {
         router.push("/login");
         return;
       }
 
       setUserId(user.id);
+      setProfile(profileData);
 
       const [{ data: booksData }, { data: reservationsData }] =
         await Promise.all([
@@ -100,7 +104,7 @@ export default function ReservationsPage() {
         ]);
 
       setBooks(booksData || []);
-      setReservations((reservationsData as any) || []); // ← FIXED HERE
+      setReservations((reservationsData as any) || []);
       setLoading(false);
     };
 
@@ -184,7 +188,7 @@ export default function ReservationsPage() {
     <DashboardLayout
       nav={memberNav}
       roleLabel="Member"
-      userName="Member"
+      userName={profile?.full_name || "Member"}
       title="Reservations"
       subtitle="Reserve unavailable books and track your requests"
       headerExtra={<NotificationBell />}
@@ -212,75 +216,93 @@ export default function ReservationsPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {filteredBooks.map((b) => {
-              const available = b.available_copies > 0;
-              const isReserved = reservedBookIds.has(b.id);
-              return (
-                <Card
-                  key={b.id}
-                  className="flex flex-col p-3"
-                  style={{ boxShadow: "var(--shadow-soft)" }}
-                >
-                  <BookCover
-                    title={b.title}
-                    author={b.author}
-                    cover={getBookGradient(b.title)}
-                    className="w-full"
-                  />
-                  <div className="mt-3 flex flex-1 flex-col">
-                    <h3 className="line-clamp-1 font-serif text-sm font-semibold text-foreground">
-                      {b.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">{b.author}</p>
-                    <span
-                      className={`mt-1 text-xs font-medium ${
-                        available ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {available
-                        ? `${b.available_copies} available`
-                        : "Unavailable"}
-                    </span>
-                    {available ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled
-                        className="mt-3 w-full"
-                      >
-                        In stock
-                      </Button>
-                    ) : isReserved ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled
-                        className="mt-3 w-full"
-                      >
-                        Reserved
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="mt-3 w-full"
-                        onClick={() => handleReserve(b)}
-                        disabled={reserving === b.id}
-                      >
-                        {reserving === b.id ? "Reserving..." : "Reserve"}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
+
+          <div className="mb-4 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            Books showing as{" "}
+            <span className="font-medium text-danger">Unavailable</span> can be
+            reserved. You will be notified when the book becomes available.
           </div>
+
+          {filteredBooks.length === 0 ? (
+            <Card className="grid place-items-center gap-2 p-12 text-center">
+              <BookMarked className="h-8 w-8 text-muted-foreground" />
+              <p className="font-medium text-foreground">No books found</p>
+              <p className="text-sm text-muted-foreground">
+                Try a different search term
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {filteredBooks.map((b) => {
+                const available = b.available_copies > 0;
+                const isReserved = reservedBookIds.has(b.id);
+                return (
+                  <Card
+                    key={b.id}
+                    className="flex flex-col p-3"
+                    style={{ boxShadow: "var(--shadow-soft)" }}
+                  >
+                    <BookCover
+                      title={b.title}
+                      author={b.author}
+                      cover={getBookGradient(b.title)}
+                      className="w-full"
+                    />
+                    <div className="mt-3 flex flex-1 flex-col">
+                      <h3 className="line-clamp-1 font-serif text-sm font-semibold text-foreground">
+                        {b.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {b.author}
+                      </p>
+                      <span
+                        className={`mt-1 text-xs font-medium ${available ? "text-success" : "text-danger"}`}
+                      >
+                        {available
+                          ? `${b.available_copies} available`
+                          : "Unavailable"}
+                      </span>
+                      {available ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          className="mt-3 w-full"
+                        >
+                          In stock
+                        </Button>
+                      ) : isReserved ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          className="mt-3 w-full"
+                        >
+                          Reserved
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="mt-3 w-full"
+                          onClick={() => handleReserve(b)}
+                          disabled={reserving === b.id}
+                        >
+                          {reserving === b.id ? "Reserving..." : "Reserve"}
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="active" className="mt-5">
           {activeReservations.length === 0 ? (
             <Card className="grid place-items-center gap-2 p-10 text-center text-muted-foreground">
-              <BookMarked className="h-7 w-7" /> No active reservations.
+              <BookMarked className="h-7 w-7" />
+              <p>No active reservations.</p>
             </Card>
           ) : (
             <div className="space-y-3">
@@ -317,7 +339,8 @@ export default function ReservationsPage() {
         <TabsContent value="history" className="mt-5">
           {historyReservations.length === 0 ? (
             <Card className="grid place-items-center gap-2 p-10 text-center text-muted-foreground">
-              <BookMarked className="h-7 w-7" /> No reservation history.
+              <BookMarked className="h-7 w-7" />
+              <p>No reservation history.</p>
             </Card>
           ) : (
             <div className="space-y-3">
