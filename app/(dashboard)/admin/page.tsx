@@ -1,55 +1,29 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { StaffDashboard } from "@/components/modules/StaffDashboard";
 import { adminNav } from "@/lib/nav-config";
 
-type Profile = {
-  full_name: string;
-  email: string;
-  role: string;
-};
+export default async function AdminDashboard() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-export default function AdminDashboard() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, role")
+    .eq("id", user.id)
+    .single();
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        window.location.href = "/login";
-        return;
-      }
-
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (p?.role !== "admin") {
-        window.location.href = "/login";
-        return;
-      }
-
-      setProfile(p);
-    };
-
-    fetchProfile();
-  }, []);
+  if (profile?.role !== "admin") redirect("/login");
 
   return (
     <DashboardLayout
       nav={adminNav}
       roleLabel="Administrator"
-      userName={profile?.full_name || "Admin User"}
+      userName={profile.full_name}
       title="Dashboard"
       subtitle="Library overview and quick navigation"
     >

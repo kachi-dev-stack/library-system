@@ -3,15 +3,33 @@
 import { useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, Menu, X, type LucideIcon } from "lucide-react";
+import {
+  LogOut,
+  Menu,
+  X,
+  LayoutDashboard,
+  BookOpen,
+  Users,
+  ArrowLeftRight,
+  BarChart3,
+  BookMarked,
+} from "lucide-react";
 import { Logo } from "./Logo";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const iconMap: Record<string, React.ElementType> = {
+  dashboard: LayoutDashboard,
+  books: BookOpen,
+  members: Users,
+  loans: ArrowLeftRight,
+  reports: BarChart3,
+  reservations: BookMarked,
+};
 
 export interface NavItem {
   label: string;
   to: string;
-  icon: LucideIcon;
+  icon: string;
 }
 
 interface DashboardLayoutProps {
@@ -67,6 +85,7 @@ export function DashboardLayout({
       </div>
       <nav className="flex-1 space-y-1 px-3 py-2">
         {nav.map((item) => {
+          const Icon = iconMap[item.icon] ?? LayoutDashboard;
           const active =
             pathname === item.to ||
             (item.to !== nav[0]?.to && pathname.startsWith(item.to));
@@ -82,7 +101,7 @@ export function DashboardLayout({
                   : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               )}
             >
-              <item.icon className="h-[18px] w-[18px]" />
+              <Icon className="h-[18px] w-[18px]" />
               {item.label}
             </Link>
           );

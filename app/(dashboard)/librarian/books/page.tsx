@@ -1,94 +1,38 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import BooksClient from "@/app/(dashboard)/admin/books/BooksClient";
 import { librarianNav } from "@/lib/nav-config";
-import { createClient } from "@/lib/supabase/client";
 
-type Profile = {
-  role: string;
-  full_name: string;
-};
+export default async function LibrarianBooksPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-type Book = {
-  id: string;
-  title: string;
-  author: string;
-  isbn: string;
-  category: string;
-  description: string;
-  total_copies: number;
-  available_copies: number;
-  published_year: number;
-};
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name")
+    .eq("id", user.id)
+    .single();
 
-export default function LibrarianBooksPage() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [books, setBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState(true);
+  if (profile?.role !== "librarian") redirect("/login");
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const supabase = createClient();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", user.id)
-        .single();
-
-      if (profileData?.role !== "librarian") {
-        router.push("/login");
-        return;
-      }
-
-      const { data: booksData } = await supabase
-        .from("books")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      setProfile(profileData);
-      setBooks(booksData || []);
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const basePath = "/librarian";
+  const { data: books } = await supabase
+    .from("books")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   return (
     <DashboardLayout
       nav={librarianNav}
       roleLabel="Librarian"
-      userName={profile?.full_name || "Librarian"}
+      userName={profile.full_name}
       title="Books"
       subtitle="Manage your catalogue"
     >
-      <BooksClient books={books} basePath={basePath} />
+      <BooksClient books={books ?? []} basePath="/librarian" />
     </DashboardLayout>
   );
 }

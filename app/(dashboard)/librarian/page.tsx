@@ -1,70 +1,29 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { DashboardLayout } from "@/components/DashboardLayout";
-
-import { librarianNav } from "@/lib/nav-config";
-import { createClient } from "@/lib/supabase/client";
 import { StaffDashboard } from "@/components/modules/StaffDashboard";
+import { librarianNav } from "@/lib/nav-config";
 
-type Profile = {
-  role: string;
-  full_name: string;
-};
+export default async function LibrarianDashboard() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-export default function LibrarianDashboardPage() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name")
+    .eq("id", user.id)
+    .single();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const supabase = createClient();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", user.id)
-        .single();
-
-      if (profileData?.role !== "librarian") {
-        router.push("/login");
-        return;
-      }
-
-      setProfile(profileData);
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  if (profile?.role !== "librarian") redirect("/login");
 
   return (
     <DashboardLayout
       nav={librarianNav}
       roleLabel="Librarian"
-      userName={profile?.full_name || "Librarian"}
+      userName={profile.full_name}
       title="Dashboard"
       subtitle="Library overview and quick navigation"
     >
